@@ -66,10 +66,8 @@ export class AppService {
       `;
 
       const response = await this.openai.chat.completions.create({
-        model: 'gpt-3.5-turbo',
+        model: 'gpt-4o',
         messages: [{ role: 'system', content: prompt }],
-        temperature: 0,
-        max_tokens: 500,
       });
 
       return JSON.parse(response.choices[0]?.message?.content ?? '{}');
