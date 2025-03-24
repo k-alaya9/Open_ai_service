@@ -1,0 +1,24 @@
+syntax = "proto3";
+
+package app;
+
+service AppService {
+  rpc GetCompletion (CompletionRequest) returns (CompletionResponse);
+}
+
+message CompletionRequest {
+  string document = 1;
+  repeated string retrieved_similar_documents = 2;
+}
+
+message CompletionResponse {
+  bool accept = 1;
+  int32 score = 2;
+  repeated Issue issues = 3;
+}
+
+message Issue {
+  string condition = 1;
+  string description = 2;
+  string location = 3;
+}
