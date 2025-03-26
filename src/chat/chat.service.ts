@@ -1,12 +1,11 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { OpenAI } from 'openai';
-import * as dotenv from 'dotenv';
+import { ChatOpenAI } from "@langchain/openai";
 
 require('dotenv').config();
 
 @Injectable()
 export class ChatService {
-    private openai: OpenAI;
+  private llm: ChatOpenAI;
 
     constructor() {
       try {
@@ -14,7 +13,11 @@ export class ChatService {
         if (!apiKey) {
           throw new Error('OpenAI API key is missing. Please set OPENAI_API_KEY in the environment variables.');
         }
-        this.openai = new OpenAI({ apiKey });
+        this.llm = new ChatOpenAI({
+          modelName: "gpt-4o",
+          apiKey: apiKey,
+          temperature: 0, 
+      });
       } catch (error) {
         console.error('Error initializing OpenAI:', error.message);
         throw new InternalServerErrorException('Failed to initialize OpenAI.');
@@ -64,66 +67,64 @@ export class ChatService {
         }
         \`\`\`
         `;
-        
-        const response = await this.openai.chat.completions.create({
-          model: 'gpt-4o',
-          messages: [{ role: 'system', content: prompt }],
-          response_format:{
-            "type":"json_schema",
-            "json_schema":{
-              "name": "validation_result",
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "accept": {
-                    "type": "boolean",
-                    "description": "Indicates whether the validation is accepted."
-                  },
-                  "score": {
-                    "type": "integer",
-                    "description": "Score ranging from 0 to 100 representing the quality of validation."
-                  },
-                  "issues": {
-                    "type": "array",
-                    "description": "List of issues found during validation.",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "condition": {
-                          "type": "string",
-                          "description": "The condition that caused the failure."
-                        },
-                        "description": {
-                          "type": "string",
-                          "description": "Explanation of why it failed."
-                        },
-                        "location": {
-                          "type": "string",
-                          "description": "Specific section in the document where the issue occurred."
-                        }
-                      },
-                      "required": [
-                        "condition",
-                        "description",
-                        "location"
-                      ],
-                      "additionalProperties": false
-                    }
-                  }
+        const llm_Structed=this.llm.withStructuredOutput({
+          "type":"json_schema",
+          "json_schema":{
+            "name": "validation_result",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "accept": {
+                  "type": "boolean",
+                  "description": "Indicates whether the validation is accepted."
                 },
-                "required": [
-                  "accept",
-                  "score",
-                  "issues"
-                ],
-                "additionalProperties": false
+                "score": {
+                  "type": "integer",
+                  "description": "Score ranging from 0 to 100 representing the quality of validation."
+                },
+                "issues": {
+                  "type": "array",
+                  "description": "List of issues found during validation.",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "condition": {
+                        "type": "string",
+                        "description": "The condition that caused the failure."
+                      },
+                      "description": {
+                        "type": "string",
+                        "description": "Explanation of why it failed."
+                      },
+                      "location": {
+                        "type": "string",
+                        "description": "Specific section in the document where the issue occurred."
+                      }
+                    },
+                    "required": [
+                      "condition",
+                      "description",
+                      "location"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
               },
-              "strict": true
-            }
+              "required": [
+                "accept",
+                "score",
+                "issues"
+              ],
+              "additionalProperties": false
+            },
+            "strict": true
           }
         });
-  
-        return JSON.parse(response.choices[0]?.message?.content ?? '{}');
+        const response = await llm_Structed.invoke([{ role: "system", content: prompt }]);
+        if (!response?.content) {
+          throw new Error("Received empty response from OpenAI");
+      }
+      return response
       } catch (error) {
         console.error('Error generating OpenAI completion:', error.message);
         throw new InternalServerErrorException('Failed to generate completion from OpenAI.');
